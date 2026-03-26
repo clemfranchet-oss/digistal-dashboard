@@ -2,6 +2,9 @@
 import { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
 
+const SHEET_ID = "1ti5t_Hj19NpBijp2GfJIfdEyAUNF6FynoXT0Lkkq31k";
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=tiktok_ads`;
+
 const C = {
   fr: "#E8C547", es: "#E85D47", it: "#47B5E8",
   accent: "#E8C547", green: "#4ADE80", red: "#F87171", purple: "#A78BFA", orange: "#FB923C",
@@ -9,22 +12,89 @@ const C = {
   text: "#F0EDE8", muted: "#6B6870", sidebar: "#0D0D0F",
 };
 
+// ── FETCH GOOGLE SHEETS ───────────────────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.trim().split("\n").slice(1);
+  return lines
+    .map(line => {
+      const cols = line.split(",").map(c => c.replace(/^"|"$/g, "").trim());
+      return {
+        date: cols[0] || "",
+        pays: cols[1] || "",
+        depense: parseFloat(cols[2]) || 0,
+        ca: parseFloat(cols[3]) || 0,
+        commandes: parseInt(cols[4]) || 0,
+        cpr: parseFloat(cols[5]) || 0,
+      };
+    })
+    .filter(r => r.pays);
+}
+
+function useSheetData() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState(null);
+
+  async function fetch_() {
+    try {
+      const res = await fetch(CSV_URL);
+      const text = await res.text();
+      setRows(parseCSV(text));
+      setLastUpdate(new Date().toLocaleTimeString("fr-FR"));
+    } catch (e) {
+      console.error("Erreur Google Sheets:", e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetch_();
+    const interval = setInterval(fetch_, 5 * 60 * 1000); // refresh every 5 min
+    return () => clearInterval(interval);
+  }, []);
+
+  function getStatsPays(pays) {
+    const r = rows.filter(r => r.pays.trim().toLowerCase() === pays.toLowerCase());
+    const depense = r.reduce((s, x) => s + x.depense, 0);
+    const commandes = r.reduce((s, x) => s + x.commandes, 0);
+    const cpr = commandes > 0 ? depense / commandes : 0;
+    return { depense, commandes, cpr };
+  }
+
+  return { rows, loading, lastUpdate, refresh: fetch_, getStatsPays };
+}
+
+// Nom des campagnes TikTok → code pays
+const CAMP_MAP = {
+  "SIO": "FR",
+  "italie": "IT",
+  "spain": "ES",
+  "belgium": "BE",
+  "uk": "UK",
+  "bel/sui/lux": "BSL",
+};
+
 const DATA = {
-  overview: { revenueMois: 28400, objectif: 35000, depenses: 9200, margeNette: 19200, margePct: 67.6, ventesTotales: 312, prixMoyen: 91, croissance: 18.4 },
+  overview: { revenueMois: 28400, objectif: 100000, depenses: 9200, margeNette: 19200, margePct: 67.6, ventesTotales: 312, prixMoyen: 91, croissance: 18.4 },
   revenuePoles: [
     { pole: "Boutiques Shopify", montant: 11628, icon: "🏪", couleur: C.accent,  depense: 1260, desc: "Vente stores turnkey 37€" },
-    { pole: "Formations + OTO",  montant: 8816,  icon: "⚡", couleur: C.orange,  depense: 560,  desc: "Formation 97€ + upsells Ads 69€" },
-    { pole: "Coaching / Acad.",  montant: 5112,  icon: "🎓", couleur: C.purple,  depense: 840,  desc: "Digistal Academy 997€" },
-    { pole: "Affiliation Shopify",montant: 1844, icon: "🤝", couleur: C.it,      depense: 0,    desc: "Commissions partenaire Shopify" },
-    { pole: "Autres revenus",    montant: 1000,  icon: "💰", couleur: C.green,   depense: 0,    desc: "Divers / ponctuels" },
+    { pole: "Bump Agents 57€",   montant: 8000,  icon: "⚡", couleur: C.orange,  depense: 0,    desc: "Pack Agents Privés Europe" },
+    { pole: "Fast Track 197€",   montant: 0,     icon: "🚀", couleur: C.purple,  depense: 0,    desc: "OTO1 — À lancer" },
+    { pole: "Pack Pubs",         montant: 5112,  icon: "🎬", couleur: C.it,      depense: 840,  desc: "69€ / 44€ downsell" },
+    { pole: "Affiliation Shopify",montant: 1844, icon: "🤝", couleur: C.green,   depense: 0,    desc: "Commissions partenaire Shopify" },
   ],
   pays: [
-    { code: "FR", nom: "France",   flag: "🇫🇷", color: C.fr, revenue: 18200, depenses: 5100, ventes: 198, leads: 1240, tauxConversion: 15.97, cac: 25.76, roas: 3.57, adsSpend: 3800, tauxClose: 42, statut: "actif",     objectif: 22000,
-      funnelData: [{ etape:"Vue Ad",valeur:48000},{etape:"Clic",valeur:9600},{etape:"Landing",valeur:4800},{etape:"Optin",valeur:1240},{etape:"Appel",valeur:320},{etape:"Vente",valeur:198}] },
-    { code: "ES", nom: "Espagne",  flag: "🇪🇸", color: C.es, revenue: 6800,  depenses: 2800, ventes: 74,  leads: 580,  tauxConversion: 12.76, cac: 37.84, roas: 2.43, adsSpend: 1900, tauxClose: 31, statut: "lancement", objectif: 10000,
-      funnelData: [{ etape:"Vue Ad",valeur:22000},{etape:"Clic",valeur:3800},{etape:"Landing",valeur:1700},{etape:"Optin",valeur:580},{etape:"Appel",valeur:130},{etape:"Vente",valeur:74}] },
-    { code: "IT", nom: "Italie",   flag: "🇮🇹", color: C.it, revenue: 3400,  depenses: 1300, ventes: 40,  leads: 290,  tauxConversion: 13.79, cac: 32.5,  roas: 2.62, adsSpend: 1000, tauxClose: 28, statut: "lancement", objectif: 8000,
-      funnelData: [{ etape:"Vue Ad",valeur:11000},{etape:"Clic",valeur:1900},{etape:"Landing",valeur:850},{etape:"Optin",valeur:290},{etape:"Appel",valeur:65},{etape:"Vente",valeur:40}] },
+    { code: "FR", nom: "France",   flag: "🇫🇷", campName: "SIO",      color: C.fr, revenue: 18200, depenses: 5100, ventes: 198, leads: 1240, tauxConversion: 15.97, cac: 25.76, roas: 3.57, adsSpend: 700,  tauxClose: 42, statut: "actif",     objectif: 30000,
+      funnelData: [{ etape:"Vue Ad",valeur:48000},{etape:"Clic",valeur:9600},{etape:"Landing",valeur:4800},{etape:"Optin",valeur:1240},{etape:"Vente",valeur:198}] },
+    { code: "ES", nom: "Espagne",  flag: "🇪🇸", campName: "spain",    color: C.es, revenue: 6800,  depenses: 2800, ventes: 74,  leads: 580,  tauxConversion: 12.76, cac: 37.84, roas: 3.31, adsSpend: 200,  tauxClose: 31, statut: "actif",     objectif: 15000,
+      funnelData: [{ etape:"Vue Ad",valeur:22000},{etape:"Clic",valeur:3800},{etape:"Landing",valeur:1700},{etape:"Optin",valeur:580},{etape:"Vente",valeur:74}] },
+    { code: "IT", nom: "Italie",   flag: "🇮🇹", campName: "italie",   color: C.it, revenue: 3400,  depenses: 1300, ventes: 40,  leads: 290,  tauxConversion: 13.79, cac: 32.5,  roas: 4.37, adsSpend: 300,  tauxClose: 28, statut: "actif",     objectif: 20000,
+      funnelData: [{ etape:"Vue Ad",valeur:11000},{etape:"Clic",valeur:1900},{etape:"Landing",valeur:850},{etape:"Optin",valeur:290},{etape:"Vente",valeur:40}] },
+    { code: "UK", nom: "UK",       flag: "🇬🇧", campName: "uk",       color: "#60A5FA", revenue: 0, depenses: 0, ventes: 0, leads: 0, tauxConversion: 0, cac: 0, roas: 0, adsSpend: 50, tauxClose: 0, statut: "lancement", objectif: 10000,
+      funnelData: [{ etape:"Vue Ad",valeur:0},{etape:"Clic",valeur:0},{etape:"Landing",valeur:0},{etape:"Optin",valeur:0},{etape:"Vente",valeur:0}] },
+    { code: "BE", nom: "Belgique", flag: "🇧🇪", campName: "belgium",  color: C.purple, revenue: 0, depenses: 0, ventes: 0, leads: 0, tauxConversion: 0, cac: 0, roas: 0, adsSpend: 60, tauxClose: 0, statut: "lancement", objectif: 5000,
+      funnelData: [{ etape:"Vue Ad",valeur:0},{etape:"Clic",valeur:0},{etape:"Landing",valeur:0},{etape:"Optin",valeur:0},{etape:"Vente",valeur:0}] },
   ],
   tendances: [
     { mois:"Oct", fr:12400, es:0,    it:0    },
@@ -35,47 +105,50 @@ const DATA = {
     { mois:"Mar", fr:18200, es:6800, it:3400 },
   ],
   depenses: [
-    { poste:"TikTok Ads FR",       montant:3800, roi:4.79, icon:"📱" },
-    { poste:"TikTok Ads ES",       montant:1900, roi:3.58, icon:"📱" },
-    { poste:"TikTok Ads IT",       montant:1000, roi:3.40, icon:"📱" },
+    { poste:"TikTok Ads FR",       montant:700,  roi:4.79, icon:"📱" },
+    { poste:"TikTok Ads ES",       montant:200,  roi:3.31, icon:"📱" },
+    { poste:"TikTok Ads IT",       montant:300,  roi:4.37, icon:"📱" },
+    { poste:"TikTok Ads UK",       montant:50,   roi:0,    icon:"📱" },
     { poste:"Créateurs UGC",       montant:1200, roi:5.20, icon:"🎬" },
-    { poste:"Closer (comm.)",      montant:560,  roi:50.7, icon:"📞" },
     { poste:"Abonnements SaaS",    montant:480,  roi:59.2, icon:"⚙️" },
     { poste:"Systeme.io",          montant:97,   roi:62.1, icon:"🔧" },
     { poste:"Make.com",            montant:29,   roi:88.0, icon:"🔧" },
     { poste:"Shopify (stores)",    montant:130,  roi:89.4, icon:"🏪" },
   ],
-  closer: { appelsTotal:515, appelsPresents:390, tauxPresence:75.7, ventesRealisees:312, tauxClose:42, caGenere:28400, commissions:2840, topObjection:"Prix trop élevé", moyAppelMin:28 },
   alertes: [
-    { type:"warning", msg:"ROAS Espagne < 2.5 — optimiser les créas", pays:"ES" },
-    { type:"warning", msg:"Taux de présence appels: 75.7% — anti no-show à renforcer", pays:"ALL" },
-    { type:"info",    msg:"Italie: 0 créateur UGC actif cette semaine", pays:"IT" },
-    { type:"success", msg:"France: ROAS 3.57 — scaler le budget ads dès maintenant", pays:"FR" },
+    { type:"success", msg:"IT ROAS 4.37x — passer à 400€/jour maintenant", pays:"IT" },
+    { type:"warning", msg:"Fast Track 197€ pas encore live — +13k€/mois manqués", pays:"ALL" },
+    { type:"info",    msg:"UK lancé ce matin — ne pas toucher avant jeudi J+3", pays:"UK" },
+    { type:"warning", msg:"DE pas encore lancé — commander Billo.app maintenant", pays:"DE" },
   ],
 };
 
 const INIT_TODOS = {
   clement:  [
-    { id:1, text:"Scaler budget TikTok FR (ROAS 3.57 ✅)", done:false, priority:"high" },
-    { id:2, text:"Recruter 2 créateurs UGC Italie", done:false, priority:"high" },
-    { id:3, text:"Valider script VSL espagnol V2", done:true,  priority:"med"  },
-    { id:4, text:"Lancer campagne Digistal Academy Q2", done:false, priority:"high" },
-    { id:5, text:"Revoir structure commission closer", done:false, priority:"med"  },
+    { id:1, text:"IT passer à 400€/jour (ROAS 4.37x ✅)", done:false, priority:"high" },
+    { id:2, text:"DE commander Billo.app maintenant", done:false, priority:"high" },
+    { id:3, text:"Rédiger page de vente Fast Track 197€", done:false, priority:"high" },
+    { id:4, text:"FR + IT uploader nouvelles créas en test", done:false, priority:"med" },
+    { id:5, text:"Email collecte témoignages toute la base", done:false, priority:"med" },
+    { id:6, text:"ES scale à 350€/jour si ROAS > 3x", done:false, priority:"med" },
+    { id:7, text:"UK décision scale jeudi J+3", done:false, priority:"low" },
   ],
   azzedine: [
-    { id:1, text:"Finaliser Make.com anti no-show (SMS J-1 + J-0)", done:false, priority:"high" },
-    { id:2, text:"Connecter Systeme.io → Google Sheets IT", done:false, priority:"high" },
-    { id:3, text:"Automatiser import CSV Shopify ES/IT", done:true,  priority:"med"  },
-    { id:4, text:"Tester webhook Calendly → tag inscrit_webinaire", done:false, priority:"med"  },
-    { id:5, text:"Dashboard connexion API TikTok Ads live", done:false, priority:"low"  },
+    { id:1, text:"Downsell OTO1 → passer à 47€", done:false, priority:"high" },
+    { id:2, text:"Intégrer Fast Track 197€ Systeme.io", done:false, priority:"high" },
+    { id:3, text:"Créer 4 segments email + règles exclusion", done:false, priority:"high" },
+    { id:4, text:"Funnel DE finir + test achat + pixel", done:false, priority:"high" },
+    { id:5, text:"War Room connexion Google Sheets live", done:true,  priority:"high" },
+    { id:6, text:"Funnels CA + AU dupliquer UK", done:false, priority:"med" },
+    { id:7, text:"TY page upsell niche +17€ conditionnel JS", done:false, priority:"med" },
+    { id:8, text:"Setup Make.com → Telegram invitation auto", done:false, priority:"low" },
   ],
   equipe:   [
-    { id:1, text:"Coaches: créer 3 nouvelles vidéos formation ES", done:false, priority:"high" },
-    { id:2, text:"Closer: atteindre 80% taux présence mars", done:false, priority:"high" },
-    { id:3, text:"UGC FR: livrer 5 raw videos semaine 12", done:true,  priority:"med"  },
-    { id:4, text:"Support: répondre tickets < 24h (100%)", done:false, priority:"med"  },
-    { id:5, text:"Traduction CGV + politique IT validée", done:true,  priority:"low"  },
-    { id:6, text:"Tester checkout PostePay Italie", done:false, priority:"high" },
+    { id:1, text:"Philippins : brief boutique premium bump 57€", done:false, priority:"high" },
+    { id:2, text:"Monteur : vidéos UK montées + 3 hooks", done:false, priority:"high" },
+    { id:3, text:"VA bilingue ES+IT : recruter cette semaine", done:false, priority:"med" },
+    { id:4, text:"UGC DE : livraison Billo.app 48-72h", done:false, priority:"med" },
+    { id:5, text:"Philippins : liste 40 agents Europe WhatsApp", done:false, priority:"high" },
   ],
 };
 
@@ -140,17 +213,108 @@ function FunnelBar({ data:fd, color }) {
   );
 }
 
-// ── PAGES ──────────────────────────────────────────────────────────────────────
+// ── LIVE ADS PANEL ────────────────────────────────────────────────────────────
+function LiveAdsPanel({ sheetData }) {
+  const { rows, loading, lastUpdate, refresh, getStatsPays } = sheetData;
 
-function PageGlobale() {
+  const campagnes = ["SIO","italie","spain","belgium","uk","bel/sui/lux"];
+  const totalDepense = campagnes.reduce((s,c) => s + getStatsPays(c).depense, 0);
+  const totalCommandes = campagnes.reduce((s,c) => s + getStatsPays(c).commandes, 0);
+
+  return (
+    <Card title={`📡 TikTok Ads Live — ${lastUpdate ? `mis à jour ${lastUpdate}` : "chargement..."}`} style={{ marginBottom:20 }}>
+      <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:12 }}>
+        <button onClick={refresh} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, padding:"5px 12px", color:C.muted, cursor:"pointer", fontSize:11, fontFamily:"DM Mono,monospace" }}>
+          🔄 Actualiser
+        </button>
+      </div>
+      {loading ? (
+        <div style={{ color:C.muted, fontSize:12, fontFamily:"DM Mono,monospace", textAlign:"center", padding:20 }}>Chargement données TikTok...</div>
+      ) : (
+        <>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:16 }}>
+            <div style={{ background:C.bg, borderRadius:8, padding:"12px", textAlign:"center", border:`1px solid ${C.border}` }}>
+              <div style={{ color:C.red, fontSize:20, fontWeight:700, fontFamily:"Syne,sans-serif" }}>{totalDepense.toFixed(0)}€</div>
+              <div style={{ color:C.muted, fontSize:10, fontFamily:"DM Mono,monospace", marginTop:3 }}>DÉPENSE TOTALE AUJOURD'HUI</div>
+            </div>
+            <div style={{ background:C.bg, borderRadius:8, padding:"12px", textAlign:"center", border:`1px solid ${C.border}` }}>
+              <div style={{ color:C.green, fontSize:20, fontWeight:700, fontFamily:"Syne,sans-serif" }}>{totalCommandes}</div>
+              <div style={{ color:C.muted, fontSize:10, fontFamily:"DM Mono,monospace", marginTop:3 }}>VENTES AUJOURD'HUI</div>
+            </div>
+            <div style={{ background:C.bg, borderRadius:8, padding:"12px", textAlign:"center", border:`1px solid ${C.border}` }}>
+              <div style={{ color:C.accent, fontSize:20, fontWeight:700, fontFamily:"Syne,sans-serif" }}>
+                {totalCommandes > 0 ? (totalDepense / totalCommandes).toFixed(2) : "—"}€
+              </div>
+              <div style={{ color:C.muted, fontSize:10, fontFamily:"DM Mono,monospace", marginTop:3 }}>CPR MOYEN</div>
+            </div>
+          </div>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+            <thead>
+              <tr>
+                {["Campagne","Pays","Dépense","Ventes","CPR"].map(h=>(
+                  <th key={h} style={{ color:C.muted, fontSize:10, fontFamily:"DM Mono,monospace", textAlign:"left", padding:"6px 10px", borderBottom:`1px solid ${C.border}`, letterSpacing:1 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {campagnes.map(camp => {
+                const s = getStatsPays(camp);
+                const pays = DATA.pays.find(p => p.campName === camp);
+                const cprOk = s.cpr > 0 && s.cpr < 50;
+                return (
+                  <tr key={camp} style={{ borderBottom:`1px solid ${C.border}22` }}>
+                    <td style={{ padding:"8px 10px", color:C.text, fontFamily:"DM Mono,monospace" }}>{camp}</td>
+                    <td style={{ padding:"8px 10px" }}>{pays ? `${pays.flag} ${pays.code}` : "—"}</td>
+                    <td style={{ padding:"8px 10px", color:C.red, fontFamily:"DM Mono,monospace" }}>{s.depense > 0 ? `${s.depense.toFixed(2)}€` : "—"}</td>
+                    <td style={{ padding:"8px 10px", color:C.green, fontFamily:"DM Mono,monospace" }}>{s.commandes > 0 ? s.commandes : "—"}</td>
+                    <td style={{ padding:"8px 10px" }}>
+                      {s.cpr > 0 ? (
+                        <span style={{ color:cprOk?C.green:C.red, fontFamily:"DM Mono,monospace" }}>{s.cpr.toFixed(2)}€</span>
+                      ) : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ── PAGES ──────────────────────────────────────────────────────────────────────
+function PageGlobale({ sheetData }) {
+  const objectifCA = 100000;
+  const caActuel = DATA.overview.revenueMois;
+  const progression = Math.min((caActuel / objectifCA) * 100, 100);
+
   return (
     <div>
+      {/* Progression objectif */}
+      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"14px 20px", marginBottom:16 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+          <span style={{ color:C.muted, fontSize:10, fontFamily:"DM Mono,monospace", letterSpacing:2, textTransform:"uppercase" }}>Progression vers 100k€ bénef/mois</span>
+          <span style={{ color:C.green, fontSize:12, fontFamily:"DM Mono,monospace", fontWeight:700 }}>{Math.round(progression)}%</span>
+        </div>
+        <div style={{ height:6, background:C.border, borderRadius:3, overflow:"hidden" }}>
+          <div style={{ width:`${progression}%`, height:"100%", background:C.green, borderRadius:3, transition:"width 0.5s" }} />
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
+          <span style={{ color:C.muted, fontSize:10, fontFamily:"DM Mono,monospace" }}>CA mars estimé : {fmt(caActuel)}</span>
+          <span style={{ color:C.muted, fontSize:10, fontFamily:"DM Mono,monospace" }}>Objectif : 100 000€</span>
+        </div>
+      </div>
+
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
         <KPI label="Revenue Mois"  value={DATA.overview.revenueMois} suffix="€" color={C.green}  sub={`Obj: ${fmt(DATA.overview.objectif)}`} />
         <KPI label="Marge Nette"   value={DATA.overview.margeNette}  suffix="€" color={C.accent} sub={fmtP(DATA.overview.margePct)+" de marge"} />
         <KPI label="Ventes"        value={DATA.overview.ventesTotales}           color={C.it}    sub={`Panier moy: ${fmt(DATA.overview.prixMoyen)}`} />
         <KPI label="Croissance"    value={DATA.overview.croissance}  suffix="%" color={C.green}  sub="vs mois précédent" />
       </div>
+
+      {/* Live TikTok Panel */}
+      <LiveAdsPanel sheetData={sheetData} />
 
       <div style={{ marginBottom:20 }}>
         {DATA.alertes.map((a,i)=>{ const col=a.type==="warning"?"#F59E0B":a.type==="success"?C.green:C.it; const ico=a.type==="warning"?"⚠":a.type==="success"?"✓":"ℹ"; return (
@@ -187,7 +351,7 @@ function PageGlobale() {
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
         <Card title="Revenue par Pôle">
           {DATA.revenuePoles.map(p=>{
-            const roi=((p.montant-p.depense)/p.depense*100).toFixed(0);
+            const roi = p.depense > 0 ? ((p.montant-p.depense)/p.depense*100).toFixed(0) : "∞";
             return (
               <div key={p.pole} style={{ marginBottom:14 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, alignItems:"center" }}>
@@ -199,19 +363,21 @@ function PageGlobale() {
                     </div>
                   </div>
                   <div style={{ textAlign:"right" }}>
-                    <div style={{ color:p.couleur, fontSize:14, fontWeight:700, fontFamily:"Syne,sans-serif" }}>{fmt(p.montant)}</div>
-                    <div style={{ color:C.green, fontSize:10, fontFamily:"DM Mono,monospace" }}>ROI +{roi}%</div>
+                    <div style={{ color:p.montant>0?p.couleur:C.muted, fontSize:14, fontWeight:700, fontFamily:"Syne,sans-serif" }}>
+                      {p.montant > 0 ? fmt(p.montant) : "À lancer"}
+                    </div>
+                    {p.montant > 0 && <div style={{ color:C.green, fontSize:10, fontFamily:"DM Mono,monospace" }}>ROI +{roi}%</div>}
                   </div>
                 </div>
                 <div style={{ height:4, background:C.border, borderRadius:2 }}>
-                  <div style={{ width:`${(p.montant/DATA.overview.revenueMois)*100}%`, height:"100%", background:p.couleur, borderRadius:2 }} />
+                  <div style={{ width:`${DATA.overview.revenueMois > 0 ? (p.montant/DATA.overview.revenueMois)*100 : 0}%`, height:"100%", background:p.couleur, borderRadius:2 }} />
                 </div>
               </div>
             );
           })}
         </Card>
 
-        <Card title="ROAS par Pays">
+        <Card title="ROAS par Pays (live)">
           <ResponsiveContainer width="100%" height={150}>
             <BarChart data={DATA.pays.map(p=>({ pays:`${p.flag} ${p.code}`, roas:p.roas }))}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
@@ -219,15 +385,15 @@ function PageGlobale() {
               <YAxis stroke={C.muted} tick={{ fontSize:10, fontFamily:"DM Mono" }} />
               <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontFamily:"DM Mono", fontSize:11 }} />
               <Bar dataKey="roas" name="ROAS" radius={[4,4,0,0]}>
-                {DATA.pays.map((p,i)=><Cell key={i} fill={p.roas>=3?C.green:C.red}/>)}
+                {DATA.pays.map((p,i)=><Cell key={i} fill={p.roas>=3?C.green:p.roas>0?C.red:C.muted}/>)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginTop:12 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:6, marginTop:12 }}>
             {DATA.pays.map(p=>(
-              <div key={p.code} style={{ textAlign:"center", background:C.bg, borderRadius:6, padding:"10px 0", border:`1px solid ${C.border}` }}>
-                <div style={{ fontSize:18 }}>{p.flag}</div>
-                <div style={{ color:p.roas>=3?C.green:C.red, fontSize:14, fontWeight:700, fontFamily:"Syne,sans-serif" }}>x{p.roas}</div>
+              <div key={p.code} style={{ textAlign:"center", background:C.bg, borderRadius:6, padding:"8px 0", border:`1px solid ${C.border}` }}>
+                <div style={{ fontSize:16 }}>{p.flag}</div>
+                <div style={{ color:p.roas>=3?C.green:p.roas>0?C.red:C.muted, fontSize:13, fontWeight:700, fontFamily:"Syne,sans-serif" }}>{p.roas > 0 ? `x${p.roas}` : "—"}</div>
                 <div style={{ color:C.muted, fontSize:9, fontFamily:"DM Mono,monospace" }}>ROAS</div>
               </div>
             ))}
@@ -246,7 +412,7 @@ function PagePoles() {
       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
         <KPI label="Revenue Pôles" value={totalRev} suffix="€" color={C.green}  />
         <KPI label="Coûts Directs" value={totalDep} suffix="€" color={C.red}    />
-        <KPI label="Marge Pôles"   value={totalRev-totalDep} suffix="€" color={C.accent} sub={fmtP(((totalRev-totalDep)/totalRev)*100)} />
+        <KPI label="Marge Pôles"   value={totalRev-totalDep} suffix="€" color={C.accent} sub={totalRev>0?fmtP(((totalRev-totalDep)/totalRev)*100):"0%"} />
       </div>
       <Card title="Revenue / Dépense / Marge par Pôle" style={{ marginBottom:20 }}>
         <ResponsiveContainer width="100%" height={200}>
@@ -263,7 +429,7 @@ function PagePoles() {
       </Card>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12 }}>
         {DATA.revenuePoles.map(p=>{
-          const roi=((p.montant-p.depense)/p.depense*100).toFixed(0);
+          const roi = p.depense > 0 ? ((p.montant-p.depense)/p.depense*100).toFixed(0) : "∞";
           return (
             <div key={p.pole} style={{ background:C.card, border:`1px solid ${p.couleur}33`, borderRadius:10, padding:16 }}>
               <div style={{ fontSize:22, marginBottom:8 }}>{p.icon}</div>
@@ -286,49 +452,60 @@ function PagePoles() {
   );
 }
 
-function PagePays() {
+function PagePays({ sheetData }) {
   const [sel,setSel]=useState("FR");
   const pays=DATA.pays.find(p=>p.code===sel);
+  const liveStats = sheetData.getStatsPays(pays?.campName || "");
+
   return (
     <div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
-        {DATA.pays.map(p=>(
-          <div key={p.code} onClick={()=>setSel(p.code)} style={{ background:sel===p.code?`${p.color}15`:C.card, border:`1px solid ${sel===p.code?p.color:C.border}`, borderRadius:10, padding:18, cursor:"pointer", transition:"all .2s" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:22 }}>{p.flag}</span>
-                <div>
-                  <div style={{ color:C.text, fontWeight:700, fontFamily:"Syne,sans-serif" }}>{p.nom}</div>
-                  <div style={{ color:p.statut==="actif"?C.green:C.orange, fontSize:9, fontFamily:"DM Mono,monospace", letterSpacing:2 }}>● {p.statut.toUpperCase()}</div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:20 }}>
+        {DATA.pays.map(p=>{
+          const ls = sheetData.getStatsPays(p.campName);
+          return (
+            <div key={p.code} onClick={()=>setSel(p.code)} style={{ background:sel===p.code?`${p.color}15`:C.card, border:`1px solid ${sel===p.code?p.color:C.border}`, borderRadius:10, padding:14, cursor:"pointer", transition:"all .2s" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                <span style={{ fontSize:20 }}>{p.flag}</span>
+                <div style={{ color:p.statut==="actif"?C.green:C.orange, fontSize:9, fontFamily:"DM Mono,monospace", letterSpacing:1 }}>● {p.statut.toUpperCase()}</div>
+              </div>
+              <div style={{ color:C.text, fontWeight:700, fontFamily:"Syne,sans-serif", marginBottom:6 }}>{p.nom}</div>
+              <div style={{ height:3, background:C.border, borderRadius:2, marginBottom:8 }}>
+                <div style={{ width:`${(p.revenue/p.objectif)*100}%`, height:"100%", background:p.color, borderRadius:2 }} />
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                <div style={{ display:"flex", justifyContent:"space-between" }}>
+                  <span style={{ color:C.muted, fontSize:9, fontFamily:"DM Mono,monospace" }}>ROAS</span>
+                  <span style={{ color:p.roas>=3?C.green:p.roas>0?C.red:C.muted, fontSize:11, fontFamily:"DM Mono,monospace", fontWeight:700 }}>{p.roas > 0 ? `x${p.roas}` : "—"}</span>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}>
+                  <span style={{ color:C.muted, fontSize:9, fontFamily:"DM Mono,monospace" }}>Dépense/j</span>
+                  <span style={{ color:C.red, fontSize:11, fontFamily:"DM Mono,monospace" }}>{ls.depense > 0 ? `${ls.depense.toFixed(0)}€` : `${p.adsSpend}€`}</span>
                 </div>
               </div>
-              <div style={{ color:p.color, fontSize:18, fontWeight:700, fontFamily:"Syne,sans-serif" }}>{fmt(p.revenue)}</div>
             </div>
-            <div style={{ height:3, background:C.border, borderRadius:2, marginBottom:10 }}>
-              <div style={{ width:`${(p.revenue/p.objectif)*100}%`, height:"100%", background:p.color, borderRadius:2 }} />
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6 }}>
-              {[{l:"ROAS",v:`x${p.roas}`,ok:p.roas>=3},{l:"CAC",v:fmt(p.cac),ok:p.cac<=30},{l:"Ventes",v:p.ventes}].map(s=>(
-                <div key={s.l} style={{ textAlign:"center" }}>
-                  <div style={{ color:s.ok===undefined?C.text:s.ok?C.green:C.red, fontSize:14, fontWeight:700, fontFamily:"Syne,sans-serif" }}>{s.v}</div>
-                  <div style={{ color:C.muted, fontSize:9, fontFamily:"DM Mono,monospace" }}>{s.l}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       {pays&&(
         <div style={{ background:C.card, border:`1px solid ${pays.color}44`, borderRadius:12, padding:24 }}>
           <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
             <span style={{ fontSize:28 }}>{pays.flag}</span>
             <div>
-              <div style={{ fontFamily:"Syne,sans-serif", fontWeight:800, fontSize:20, color:pays.color }}>{pays.nom} — Détail Mars 2026</div>
+              <div style={{ fontFamily:"Syne,sans-serif", fontWeight:800, fontSize:20, color:pays.color }}>{pays.nom} — Live</div>
               <div style={{ color:C.muted, fontSize:11, fontFamily:"DM Mono,monospace" }}>Objectif: {fmt(pays.objectif)} — atteint à {((pays.revenue/pays.objectif)*100).toFixed(0)}%</div>
+            </div>
+            <div style={{ marginLeft:"auto", background:C.green+"22", border:`1px solid ${C.green}44`, borderRadius:8, padding:"8px 16px", textAlign:"center" }}>
+              <div style={{ color:C.green, fontSize:10, fontFamily:"DM Mono,monospace", letterSpacing:1, marginBottom:2 }}>DÉPENSE LIVE</div>
+              <div style={{ color:C.red, fontSize:20, fontWeight:700, fontFamily:"Syne,sans-serif" }}>{liveStats.depense > 0 ? `${liveStats.depense.toFixed(0)}€` : "—"}</div>
             </div>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:22 }}>
-            {[{l:"Revenue",v:fmt(pays.revenue),col:pays.color},{l:"Dépenses",v:fmt(pays.depenses),col:C.red},{l:"Marge",v:fmt(pays.revenue-pays.depenses),col:C.green},{l:"Leads",v:pays.leads,col:C.accent}].map(s=>(
+            {[
+              {l:"Revenue",v:fmt(pays.revenue),col:pays.color},
+              {l:"Dépenses",v:fmt(pays.depenses),col:C.red},
+              {l:"Marge",v:fmt(pays.revenue-pays.depenses),col:C.green},
+              {l:"Ventes live",v:liveStats.commandes > 0 ? liveStats.commandes : pays.ventes, col:C.accent}
+            ].map(s=>(
               <div key={s.l} style={{ background:C.bg, borderRadius:8, padding:"14px 18px", border:`1px solid ${C.border}` }}>
                 <div style={{ color:C.muted, fontSize:10, fontFamily:"DM Mono,monospace", letterSpacing:1, textTransform:"uppercase", marginBottom:4 }}>{s.l}</div>
                 <div style={{ color:s.col, fontSize:20, fontWeight:700, fontFamily:"Syne,sans-serif" }}>{s.v}</div>
@@ -341,14 +518,14 @@ function PagePays() {
               <FunnelBar data={pays.funnelData} color={pays.color} />
             </div>
             <div>
-              <div style={{ color:C.muted, fontSize:10, fontFamily:"DM Mono,monospace", letterSpacing:2, textTransform:"uppercase", marginBottom:14 }}>Métriques Ads</div>
+              <div style={{ color:C.muted, fontSize:10, fontFamily:"DM Mono,monospace", letterSpacing:2, textTransform:"uppercase", marginBottom:14 }}>Métriques Live</div>
               <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
                 {[
-                  {l:"Budget Ads / mois",v:fmt(pays.adsSpend)},
+                  {l:"Dépense pub aujourd'hui",v:liveStats.depense > 0 ? `${liveStats.depense.toFixed(2)}€` : `${pays.adsSpend}€/jour budget`},
+                  {l:"CPR live",v:liveStats.cpr > 0 ? `${liveStats.cpr.toFixed(2)}€` : "—",ok:liveStats.cpr > 0 && liveStats.cpr < 50},
                   {l:"ROAS",v:`x${pays.roas}`,ok:pays.roas>=3},
                   {l:"CAC",v:fmt(pays.cac),ok:pays.cac<=30},
                   {l:"Taux Conv. Lead→Vente",v:fmtP(pays.tauxConversion)},
-                  {l:"Taux de Close",v:fmtP(pays.tauxClose)},
                 ].map(m=>(
                   <div key={m.l} style={{ display:"flex", justifyContent:"space-between", padding:"9px 14px", background:C.bg, borderRadius:6, border:`1px solid ${C.border}` }}>
                     <span style={{ color:C.muted, fontSize:12, fontFamily:"DM Mono,monospace" }}>{m.l}</span>
@@ -411,57 +588,6 @@ function PageDepenses() {
           <div style={{ marginTop:14, paddingTop:12, borderTop:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between" }}>
             <span style={{ color:C.muted, fontFamily:"DM Mono,monospace", fontSize:12 }}>TOTAL</span>
             <span style={{ color:C.red, fontFamily:"Syne,sans-serif", fontSize:18, fontWeight:700 }}>{fmt(total)}</span>
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function PageCloser() {
-  const cs=DATA.closer;
-  const noShow=cs.appelsTotal-cs.appelsPresents;
-  const pertEst=Math.round(noShow*0.42*91);
-  return (
-    <div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
-        <KPI label="Appels Bookés"  value={cs.appelsTotal} color={C.accent} />
-        <KPI label="Taux Présence"  value={cs.tauxPresence} suffix="%" color={cs.tauxPresence>=80?C.green:C.red} sub="Obj: 80%" />
-        <KPI label="Taux de Close"  value={cs.tauxClose}   suffix="%" color={cs.tauxClose>=45?C.green:C.red}    sub="Obj: 45%" />
-        <KPI label="CA Généré"      value={cs.caGenere}    suffix="€" color={C.green} sub={`Comm: ${fmt(cs.commissions)}`} />
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-        <Card title="Pipeline Closer">
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={[{e:"Bookés",v:cs.appelsTotal},{e:"Présents",v:cs.appelsPresents},{e:"Closés",v:cs.ventesRealisees}]}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-              <XAxis dataKey="e" stroke={C.muted} tick={{ fontSize:10, fontFamily:"DM Mono" }} />
-              <YAxis stroke={C.muted} tick={{ fontSize:10, fontFamily:"DM Mono" }} />
-              <Tooltip contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:8, fontFamily:"DM Mono", fontSize:11 }} />
-              <Bar dataKey="v" radius={[6,6,0,0]}>
-                {[C.accent,C.it,C.green].map((col,i)=><Cell key={i} fill={col}/>)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-        <Card title="Analyse Performance">
-          <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
-            {[
-              {l:"No-shows",v:`${noShow} appels`,alert:true},
-              {l:"Perte revenue estimée",v:`~${fmt(pertEst)}`,alert:true},
-              {l:"Récupérable (30%)",v:`~${fmt(Math.round(pertEst*.3))}`},
-              {l:"Durée moy. appel",v:`${cs.moyAppelMin} min`},
-              {l:"Top objection",v:cs.topObjection},
-            ].map(m=>(
-              <div key={m.l} style={{ display:"flex", justifyContent:"space-between", padding:"9px 14px", background:C.bg, borderRadius:6, border:`1px solid ${m.alert?C.red+"44":C.border}` }}>
-                <span style={{ color:C.muted, fontSize:12, fontFamily:"DM Mono,monospace" }}>{m.l}</span>
-                <span style={{ color:m.alert?C.red:C.text, fontSize:12, fontWeight:600, fontFamily:"DM Mono,monospace" }}>{m.v}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ marginTop:16, padding:14, background:C.accent+"11", border:`1px solid ${C.accent}33`, borderRadius:8 }}>
-            <div style={{ color:C.accent, fontSize:10, fontFamily:"DM Mono,monospace", letterSpacing:1, marginBottom:4 }}>💡 ACTION PRIORITAIRE</div>
-            <div style={{ color:C.text, fontSize:12 }}>Make.com anti no-show (SMS J-1+J-0) → récupérer ~{fmt(Math.round(pertEst*.3))}/mois</div>
           </div>
         </Card>
       </div>
@@ -556,16 +682,23 @@ const NAV=[
   {id:"poles",    label:"Pôles Revenue",  icon:"🏆", group:"Dashboard"},
   {id:"pays",     label:"Par Pays",       icon:"🌍", group:"Dashboard"},
   {id:"depenses", label:"Dépenses & ROI", icon:"💸", group:"Dashboard"},
-  {id:"closer",   label:"Closer",         icon:"📞", group:"Équipe"},
   {id:"todo",     label:"Todo",           icon:"✅", group:"Équipe"},
 ];
 
 export default function App() {
   const [page,setPage]=useState("global");
   const [collapsed,setCollapsed]=useState(false);
+  const sheetData = useSheetData();
   const groups=[...new Set(NAV.map(n=>n.group))];
   const current=NAV.find(n=>n.id===page);
-  const pages={ global:<PageGlobale/>, poles:<PagePoles/>, pays:<PagePays/>, depenses:<PageDepenses/>, closer:<PageCloser/>, todo:<PageTodo/> };
+
+  const pages={
+    global: <PageGlobale sheetData={sheetData} />,
+    poles:  <PagePoles />,
+    pays:   <PagePays sheetData={sheetData} />,
+    depenses: <PageDepenses />,
+    todo:   <PageTodo />,
+  };
 
   return (
     <div style={{ display:"flex", height:"100vh", background:C.bg, fontFamily:"DM Sans,sans-serif", color:C.text, overflow:"hidden" }}>
@@ -597,9 +730,17 @@ export default function App() {
           ))}
         </div>
 
-        <button onClick={()=>setCollapsed(v=>!v)} style={{ background:"none", border:"none", borderTop:`1px solid ${C.border}`, padding:"13px 0", color:C.muted, cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          {collapsed?"→":"←"}
-        </button>
+        <div style={{ padding:collapsed?"10px 0":"10px 16px", borderTop:`1px solid ${C.border}` }}>
+          {!collapsed && (
+            <div style={{ background:C.green+"11", border:`1px solid ${C.green}33`, borderRadius:8, padding:"8px 10px", marginBottom:8 }}>
+              <div style={{ color:C.green, fontSize:9, fontFamily:"DM Mono,monospace", letterSpacing:1 }}>● LIVE — TikTok Ads</div>
+              <div style={{ color:C.muted, fontSize:10, marginTop:2 }}>{sheetData.lastUpdate ? `Mis à jour ${sheetData.lastUpdate}` : "Chargement..."}</div>
+            </div>
+          )}
+          <button onClick={()=>setCollapsed(v=>!v)} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, padding:"8px 0", color:C.muted, cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", width:"100%" }}>
+            {collapsed?"→":"←"}
+          </button>
+        </div>
       </div>
 
       {/* MAIN */}
@@ -612,13 +753,16 @@ export default function App() {
           </div>
           <div style={{ display:"flex", gap:6, alignItems:"center" }}>
             <span style={{ color:C.green, fontSize:9, fontFamily:"DM Mono,monospace", letterSpacing:1 }}>● LIVE</span>
-            {["🇫🇷","🇪🇸","🇮🇹"].map((f,i)=><span key={i} style={{ fontSize:16 }}>{f}</span>)}
+            {["🇫🇷","🇪🇸","🇮🇹","🇬🇧"].map((f,i)=><span key={i} style={{ fontSize:16 }}>{f}</span>)}
           </div>
         </div>
         <div style={{ flex:1, overflowY:"auto", padding:22 }}>
           {pages[page]}
         </div>
       </div>
+    </div>
+  );
+}
     </div>
   );
 }
